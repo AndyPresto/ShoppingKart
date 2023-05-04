@@ -1,0 +1,98 @@
+﻿@page
+@model IndexModel
+@{
+    ViewData["Title"] = "Home page";
+}
+<div id="app">
+    <div class="container" v-if="ready">
+        <div class="row py-5">
+            <div class="col-12">
+                <h1>Shopping Kart</h1>
+            </div>
+
+            <div class="col-12 col-md-6">
+                <table class="table">
+                    <thead>
+                    <tr>
+                        <th>SKU</th>
+                        <th>Price</th>
+                        <th>Offer</th>
+                        <th>Quantity</th> 
+                        <th></th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    <tr v-for="product in products" :key="product.sku">
+                        <td>{{ product.sku }}</td>
+                        <td>£{{ product.price.toFixed(2) }}</td>
+                        <td v-if="product.offer">{{ product.offer.quantity }} for £{{ product.offer.offerPrice.toFixed(2) }}</td>
+                        <td v-else></td>
+                        <td>{{ cart[product.sku] || 0 }}</td> <!-- Add a new column showing the quantity of each product in the cart -->
+                        <td><button @@click="scanProduct(product.sku)">Scan</button></td>
+                    </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <div class="row">
+            <div class="col-12">
+                <button @@click="calculateTotal">Calculate Total</button>
+                <p>Total: £{{ totalPrice.toFixed(2) }}</p>
+            </div>
+            <div class="col-12" v-if="errorMessage">
+                <div class="alert">{{errorMessage}}</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="/lib/vue/vue.global.js"></script>
+<script>
+    const { createApp } = Vue
+
+    createApp({
+        data() {
+            return {
+                ready: false,
+                products: [],
+                cart: {},
+                totalPrice: 0,
+                errorMessage: null,
+            }
+        },
+        methods: {
+            async fetchProducts() {
+                const response = await fetch('api/Products/GetProductsAndOffers');
+                this.products = await response.json();
+                this.ready = true;
+            },
+            scanProduct(sku) {
+                console.log("Scanning: " + sku);
+                if (this.cart[sku]) {
+                    this.cart[sku]++;
+                } else {
+                    this.cart[sku] = 1;
+                }
+            },
+            async calculateTotal() {
+                // Convert the cart object to a list of CartItem objects
+                const cartItems = Object.entries(this.cart).map(([sku, quantity]) => ({ Sku: sku, Quantity: quantity }));
+
+                const response = await fetch('api/Checkout/CalculateTotal', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(cartItems),
+                });
+                if (!response.ok) {
+                    this.errorMessage = "Error: " + response.status;
+                } else {
+                    const result = await response.json();
+                    this.totalPrice = result.cost;
+                }
+            },
+        },
+        mounted() {
+            this.fetchProducts();
+        },
+    }).mount('#app');
+</script>
